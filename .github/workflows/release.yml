@@ -1,0 +1,154 @@
+name: Build and publish
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      push:
+        description: 'Push images to Docker Hub'
+        type: boolean
+        default: false
+
+# A V8 build takes >1 hour even on native runners; cancel superseded runs.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/') }}
+
+env:
+  REGISTRY: docker.io
+  REPO: marekskopal/php-v8js
+
+jobs:
+  # Build each platform on a native runner. We push images by digest only
+  # (no tags yet); the `manifest` job assembles the multi-arch tags afterward.
+  build:
+    name: build (${{ matrix.platform }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: amd64
+            runner: ubuntu-24.04
+          - platform: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      metadata_amd64: ${{ steps.bake.outputs.metadata }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Decide whether to push
+        id: push
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "value=false" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "value=${{ inputs.push }}" >> "$GITHUB_OUTPUT"
+          else
+            # branch push or tag push
+            echo "value=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        if: steps.push.outputs.value == 'true'
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Bake (per-arch push by digest)
+        id: bake
+        uses: docker/bake-action@v5
+        with:
+          files: docker-bake.hcl
+          # Override the multi-arch platforms variable to this single platform.
+          set: |
+            *.platform=linux/${{ matrix.platform }}
+            *.output=type=image,name=${{ env.REGISTRY }}/${{ env.REPO }},push-by-digest=true,name-canonical=true,push=${{ steps.push.outputs.value }}
+            *.cache-from=type=gha,scope=${{ matrix.platform }}
+            *.cache-to=type=gha,mode=max,scope=${{ matrix.platform }}
+
+      - name: Export digests
+        if: steps.push.outputs.value == 'true'
+        run: |
+          mkdir -p /tmp/digests
+          echo '${{ steps.bake.outputs.metadata }}' > /tmp/digests/metadata-${{ matrix.platform }}.json
+
+      - name: Upload digests
+        if: steps.push.outputs.value == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ matrix.platform }}
+          path: /tmp/digests/metadata-${{ matrix.platform }}.json
+          if-no-files-found: error
+          retention-days: 1
+
+  # Stitch per-arch digests into the final multi-arch tags described by
+  # docker-bake.hcl. Runs only when we actually pushed.
+  manifest:
+    name: manifest
+    needs: build
+    runs-on: ubuntu-24.04
+    if: |
+      (github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))) ||
+      (github.event_name == 'workflow_dispatch' && inputs.push == true)
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: /tmp/digests
+          pattern: digests-*
+          merge-multiple: false
+
+      - name: Resolve tags for every bake target and create manifests
+        run: |
+          set -euo pipefail
+          # Print the tag list bake would produce, then for each target
+          # combine the amd64 + arm64 per-arch digests into a single manifest.
+          targets_json=$(docker buildx bake -f docker-bake.hcl --print 2>/dev/null | jq -c '.target')
+
+          amd64_meta=/tmp/digests/digests-amd64/metadata-amd64.json
+          arm64_meta=/tmp/digests/digests-arm64/metadata-arm64.json
+
+          # bake metadata maps target name -> { "containerimage.digest": "sha256:..." }
+          for target in $(echo "$targets_json" | jq -r 'keys[]'); do
+            tags=$(echo "$targets_json" | jq -r --arg t "$target" '.[$t].tags[]')
+            amd64_digest=$(jq -r --arg t "$target" '.[$t]["containerimage.digest"]' "$amd64_meta")
+            arm64_digest=$(jq -r --arg t "$target" '.[$t]["containerimage.digest"]' "$arm64_meta")
+            if [ "$amd64_digest" = "null" ] || [ "$arm64_digest" = "null" ]; then
+              echo "missing digest for target $target (amd64=$amd64_digest arm64=$arm64_digest)" >&2
+              exit 1
+            fi
+
+            tag_args=""
+            for tag in $tags; do
+              tag_args="$tag_args --tag $tag"
+            done
+
+            echo "::group::manifest for $target"
+            docker buildx imagetools create \
+              $tag_args \
+              "${{ env.REGISTRY }}/${{ env.REPO }}@$amd64_digest" \
+              "${{ env.REGISTRY }}/${{ env.REPO }}@$arm64_digest"
+            echo "::endgroup::"
+          done
+
+      - name: Inspect a representative tag
+        run: |
+          docker buildx imagetools inspect "${{ env.REGISTRY }}/${{ env.REPO }}:latest" || true
