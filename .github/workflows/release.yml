@@ -69,9 +69,16 @@ jobs:
         uses: docker/bake-action@v5
         with:
           files: docker-bake.hcl
-          # Override the multi-arch platforms variable to this single platform.
+          # Override:
+          #   * platform → this runner's arch only (native build, no QEMU)
+          #   * output → push by digest only; tags get applied later by the
+          #     `manifest` job which stitches both arches into one manifest
+          #   * tags=    (empty) → mutually exclusive with push-by-digest,
+          #     so we wipe the tags the bake file defines for each target
+          #   * scoped GHA cache → keep amd64 and arm64 cache entries apart
           set: |
             *.platform=linux/${{ matrix.platform }}
+            *.tags=
             *.output=type=image,name=${{ env.REGISTRY }}/${{ env.REPO }},push-by-digest=true,name-canonical=true,push=${{ steps.push.outputs.value }}
             *.cache-from=type=gha,scope=${{ matrix.platform }}
             *.cache-to=type=gha,mode=max,scope=${{ matrix.platform }}
