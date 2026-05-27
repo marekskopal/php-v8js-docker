@@ -39,8 +39,6 @@ jobs:
     permissions:
       contents: read
       packages: write
-    outputs:
-      metadata_amd64: ${{ steps.bake.outputs.metadata }}
     steps:
       - uses: actions/checkout@v4
 
@@ -85,9 +83,16 @@ jobs:
 
       - name: Export digests
         if: steps.push.outputs.value == 'true'
+        # `echo '${{ ... }}'` breaks on JSON that contains shell-special
+        # characters (the provenance block has `(`, `)`, quotes, etc.).
+        # A single-quoted heredoc disables shell interpolation of the body,
+        # so whatever GitHub Actions substitutes for the metadata is dumped
+        # verbatim into the file.
         run: |
           mkdir -p /tmp/digests
-          echo '${{ steps.bake.outputs.metadata }}' > /tmp/digests/metadata-${{ matrix.platform }}.json
+          cat <<'METADATA_EOF' > /tmp/digests/metadata-${{ matrix.platform }}.json
+          ${{ steps.bake.outputs.metadata }}
+          METADATA_EOF
 
       - name: Upload digests
         if: steps.push.outputs.value == 'true'
