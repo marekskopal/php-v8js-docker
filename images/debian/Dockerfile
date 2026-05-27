@@ -1,11 +1,12 @@
 # syntax=docker/dockerfile:1.7
 #
-# Debian (bookworm) image: builds V8 from source via depot_tools, then the
-# v8js PHP extension, then assembles a slim runtime on the official PHP base.
+# Debian (trixie / Debian 13) image: builds V8 from source via depot_tools,
+# then the v8js PHP extension, then assembles a slim runtime on the official
+# PHP base.
 
 ARG PHP_VERSION=8.4
 ARG PHP_VARIANT=cli
-ARG OS_TAG=bookworm
+ARG OS_TAG=trixie
 ARG V8_VERSION=12.9.203
 # Pinned to the head of phpv8/v8js's php8 branch as of 2026-04-19 (the merge
 # of PR #545: PHP 8.4 deprecation fixes and memory-leak patches).
@@ -13,7 +14,7 @@ ARG V8JS_REF=8a39efa3
 ARG V8_PREFIX=/opt/v8
 
 # ---------------------------------------------------------------------------
-# Stage 1: V8 builder. Intentionally based on debian:bookworm-slim (not the
+# Stage 1: V8 builder. Intentionally based on debian:trixie-slim (not the
 # PHP image) so the cache layer is shared between PHP 8.4 and 8.5 builds.
 # ---------------------------------------------------------------------------
 FROM debian:${OS_TAG}-slim AS v8-builder

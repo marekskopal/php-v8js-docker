@@ -58,7 +58,7 @@ mkdir -p "$out_dir"
 #                                   sysroot; build against the host's libc
 #                                   (this is what makes arm64 native work)
 #   * is_clang = false            → use the host's gcc/g++. V8 12.9 still
-#                                   compiles with gcc 12+ (bookworm default).
+#                                   compiles with gcc 12+ (trixie ships gcc 14).
 #                                   Setting true would require apt-installing
 #                                   Chromium's clang into the builder.
 #   * treat_warnings_as_errors = false → tolerate toolchain drift (upstream
@@ -88,7 +88,7 @@ buildtools/linux64/gn gen "$out_dir"
 # Build only the embedder-facing targets, not V8's internal test binaries.
 # Two arm64 test files (test-assembler-arm64.cc and test-code-stub-assembler.cc)
 # use C++23 `42.15f16` literals and Clang-syntax inline asm, neither of which
-# GCC 12 (Debian bookworm default) accepts. They're compiled into the
+# Debian trixie's GCC 14 accepts. They're compiled into the
 # `cctest` executable, not libv8.so — skipping them is harmless for an
 # embedder. Build time drops too: ~3000 objects instead of ~4000.
 ninja -j "$V8_JOBS" -C "$out_dir" v8 v8_libplatform v8_libbase

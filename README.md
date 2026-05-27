@@ -22,20 +22,20 @@ docker pull marekskopal/php-v8js:latest
 
 | PHP | Variant | OS       | Tag                                       |
 | --- | ------- | -------- | ----------------------------------------- |
-| 8.4 | cli     | bookworm | `8.4-cli-bookworm`, `8.4-cli`, `8.4`      |
-| 8.4 | fpm     | bookworm | `8.4-fpm-bookworm`, `8.4-fpm`             |
-| 8.4 | apache  | bookworm | `8.4-apache-bookworm`, `8.4-apache`       |
+| 8.4 | cli     | trixie | `8.4-cli-trixie`, `8.4-cli`, `8.4`      |
+| 8.4 | fpm     | trixie | `8.4-fpm-trixie`, `8.4-fpm`             |
+| 8.4 | apache  | trixie | `8.4-apache-trixie`, `8.4-apache`       |
 | 8.4 | cli     | alpine   | `8.4-cli-alpine`                          |
 | 8.4 | fpm     | alpine   | `8.4-fpm-alpine`                          |
-| 8.5 | cli     | bookworm | `8.5-cli-bookworm`, `8.5-cli`, `8.5`, `latest` |
-| 8.5 | fpm     | bookworm | `8.5-fpm-bookworm`, `8.5-fpm`             |
-| 8.5 | apache  | bookworm | `8.5-apache-bookworm`, `8.5-apache`       |
+| 8.5 | cli     | trixie | `8.5-cli-trixie`, `8.5-cli`, `8.5`, `latest` |
+| 8.5 | fpm     | trixie | `8.5-fpm-trixie`, `8.5-fpm`             |
+| 8.5 | apache  | trixie | `8.5-apache-trixie`, `8.5-apache`       |
 | 8.5 | cli     | alpine   | `8.5-cli-alpine`                          |
 | 8.5 | fpm     | alpine   | `8.5-fpm-alpine`                          |
 
 Tag shorthands follow the [official `php` image
 convention](https://hub.docker.com/_/php): bare `<php>` and
-`<php>-<variant>` resolve to the Debian/bookworm variant.
+`<php>-<variant>` resolve to the Debian/trixie variant.
 
 There is intentionally **no `apache-alpine` variant** — the upstream
 `php` image does not provide one, and building Apache + `mod_php`
@@ -75,7 +75,7 @@ and exercised with `tests/smoke.php`:
 
 | Image | V8 reported by `V8Js::V8_VERSION` | Result |
 | ----- | --------------------------------- | ------ |
-| `8.4-cli-bookworm` (V8 12.9.203 from source) | `12.9.203` | smoke OK |
+| `8.4-cli-trixie` (V8 12.9.203 from source) | `12.9.203` | smoke OK |
 | `8.4-cli-alpine` (V8 from Node 24.14.1) | `13.6.233.17-node.44` | smoke OK |
 | `8.5-cli-alpine` (V8 from Node 24.14.1) | `13.6.233.17-node.44` | smoke OK |
 
@@ -201,12 +201,13 @@ docker run --rm -v "$PWD/tests:/tests" marekskopal/php-v8js:latest \
 ## Build hardening: alternative toolchain on Debian
 
 The V8 build script uses two non-default choices that turned out to be
-needed for native arm64 builds with Debian bookworm's GCC 12:
+needed for native arm64 builds with Debian trixie's GCC 14:
 
 * **`is_clang = false` + skip cctest** — V8's arm64 test code
   (`test-assembler-arm64.cc`, `test-code-stub-assembler.cc`) uses C++23
-  `42.15f16` numeric literals and Clang-syntax inline asm. GCC 12
-  rejects both. The script invokes ninja only for the embedder targets
+  `42.15f16` numeric literals and Clang-syntax inline asm. GCC 14
+  parses the literals but still rejects the inline asm syntax. The
+  script invokes ninja only for the embedder targets
   (`v8 v8_libplatform v8_libbase`) so those test files never compile.
 * **`use_sysroot = false`** — skips Chromium's vendored Debian sysroot
   download (which is amd64-only for `arm64.release` because that GN

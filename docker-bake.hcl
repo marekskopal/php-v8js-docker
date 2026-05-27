@@ -1,7 +1,7 @@
 # docker buildx bake matrix for the php-v8js image set.
 #
 # Convention for tags mirrors the official `php` image:
-#   <php>-<variant>-<os>     e.g. 8.4-fpm-bookworm   (always available)
+#   <php>-<variant>-<os>     e.g. 8.4-fpm-trixie   (always available)
 #   <php>-<variant>          e.g. 8.4-fpm           (Debian shorthand, like upstream php image)
 #   <php>                    e.g. 8.4               (cli, Debian — latest within the minor)
 #   latest                   = newest PHP + cli + Debian
@@ -36,17 +36,17 @@ function "img" {
   result = "${REGISTRY}/${REPO}:${tag}"
 }
 
-# Extra tags applied to the Debian-bookworm-cli image of LATEST_PHP only.
+# Extra tags applied to the Debian-trixie-cli image of LATEST_PHP only.
 function "extra_latest_tags" {
   params = [php, variant, os]
-  result = (php == LATEST_PHP && variant == "cli" && os == "bookworm") ? [img("latest")] : []
+  result = (php == LATEST_PHP && variant == "cli" && os == "trixie") ? [img("latest")] : []
 }
 
-# Debian "shorthand" tag (e.g. :8.4-cli) only for the bookworm row, since
-# bookworm is the default for the upstream php image. cli also gets bare :<php>.
+# Debian "shorthand" tag (e.g. :8.4-cli) only for the trixie row, since
+# trixie is the default for the upstream php image. cli also gets bare :<php>.
 function "debian_shorthand_tags" {
   params = [php, variant, os]
-  result = (os != "bookworm") ? [] : (variant == "cli" ? [img("${php}-${variant}"), img(php)] : [img("${php}-${variant}")])
+  result = (os != "trixie") ? [] : (variant == "cli" ? [img("${php}-${variant}"), img(php)] : [img("${php}-${variant}")])
 }
 
 group "default" {
@@ -75,7 +75,7 @@ target "_debian" {
   inherits   = ["_common"]
   dockerfile = "images/debian/Dockerfile"
   args = {
-    OS_TAG     = "bookworm"
+    OS_TAG     = "trixie"
     V8_VERSION = V8_VERSION
     V8JS_REF   = V8JS_REF
   }
@@ -99,9 +99,9 @@ target "debian-cli" {
     PHP_VARIANT = "cli"
   }
   tags = concat(
-    [img("${php}-cli-bookworm")],
-    debian_shorthand_tags(php, "cli", "bookworm"),
-    extra_latest_tags(php, "cli", "bookworm"),
+    [img("${php}-cli-trixie")],
+    debian_shorthand_tags(php, "cli", "trixie"),
+    extra_latest_tags(php, "cli", "trixie"),
   )
 }
 
@@ -114,8 +114,8 @@ target "debian-fpm" {
     PHP_VARIANT = "fpm"
   }
   tags = concat(
-    [img("${php}-fpm-bookworm")],
-    debian_shorthand_tags(php, "fpm", "bookworm"),
+    [img("${php}-fpm-trixie")],
+    debian_shorthand_tags(php, "fpm", "trixie"),
   )
 }
 
@@ -128,8 +128,8 @@ target "debian-apache" {
     PHP_VARIANT = "apache"
   }
   tags = concat(
-    [img("${php}-apache-bookworm")],
-    debian_shorthand_tags(php, "apache", "bookworm"),
+    [img("${php}-apache-trixie")],
+    debian_shorthand_tags(php, "apache", "trixie"),
   )
 }
 
