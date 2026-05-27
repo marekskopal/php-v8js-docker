@@ -1,11 +1,22 @@
 # php-v8js Docker images
 
+[![Docker Hub](https://img.shields.io/badge/Docker%20Hub-marekskopal%2Fphp--v8js-2496ED?logo=docker&logoColor=white)](https://hub.docker.com/r/marekskopal/php-v8js)
+[![Image size](https://img.shields.io/docker/image-size/marekskopal/php-v8js/latest?label=latest%20size)](https://hub.docker.com/r/marekskopal/php-v8js/tags)
+[![Pulls](https://img.shields.io/docker/pulls/marekskopal/php-v8js)](https://hub.docker.com/r/marekskopal/php-v8js)
+
 Production-grade Docker images for PHP **8.4** and **8.5** with the
 [phpv8/v8js](https://github.com/phpv8/v8js) extension and Composer 2. Images
 are multi-arch (`linux/amd64` + `linux/arm64`, including Apple Silicon
-Macs via Docker Desktop) and published to
-[`marekskopal/php-v8js`](https://hub.docker.com/r/marekskopal/php-v8js) on
-Docker Hub.
+Macs via Docker Desktop).
+
+**Built images are published to Docker Hub at
+[`marekskopal/php-v8js`](https://hub.docker.com/r/marekskopal/php-v8js)** —
+see the [tag matrix](#tag-matrix) below for the full list of available
+tags, or [browse all tags on Docker Hub](https://hub.docker.com/r/marekskopal/php-v8js/tags).
+
+```bash
+docker pull marekskopal/php-v8js:latest
+```
 
 ## Tag matrix
 
