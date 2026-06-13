@@ -16,11 +16,16 @@ ARG PHP_VERSION=8.4
 ARG PHP_VARIANT=cli
 ARG OS_TAG=alpine
 ARG V8JS_REF=8a39efa3
+# Threading model of the PHP base used to COMPILE v8js. A `.so` built on an
+# NTS base cannot load into a ZTS PHP (and vice versa) — the TSRM ABI differs.
+# Keep this in lock-step with the runtime: `cli` for the NTS variants
+# (cli/fpm), `zts` for the thread-safe variant. The bake file sets it.
+ARG BUILDER_VARIANT=cli
 
 # ---------------------------------------------------------------------------
 # Stage 1: v8js extension builder.
 # ---------------------------------------------------------------------------
-FROM php:${PHP_VERSION}-cli-${OS_TAG} AS ext-builder
+FROM php:${PHP_VERSION}-${BUILDER_VARIANT}-${OS_TAG} AS ext-builder
 
 ARG V8JS_REF
 

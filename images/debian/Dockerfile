@@ -7,6 +7,11 @@
 ARG PHP_VERSION=8.4
 ARG PHP_VARIANT=cli
 ARG OS_TAG=trixie
+# Threading model of the PHP base used to COMPILE v8js. A `.so` built on an
+# NTS base cannot load into a ZTS PHP (and vice versa) — the TSRM ABI differs.
+# Keep this in lock-step with the runtime: `cli` for the NTS variants
+# (cli/fpm/apache), `zts` for the thread-safe variant. The bake file sets it.
+ARG BUILDER_VARIANT=cli
 ARG V8_VERSION=12.9.203
 # Pinned to the head of phpv8/v8js's php8 branch as of 2026-04-19 (the merge
 # of PR #545: PHP 8.4 deprecation fixes and memory-leak patches).
@@ -42,11 +47,11 @@ RUN chmod +x /usr/local/bin/build-v8.sh && \
         /usr/local/bin/build-v8.sh
 
 # ---------------------------------------------------------------------------
-# Stage 2: v8js extension builder. Uses the CLI variant of the PHP base so
-# the compiled v8js.so is ABI-compatible with cli/fpm/apache (they share
-# headers within a PHP minor).
+# Stage 2: v8js extension builder. BUILDER_VARIANT selects the threading model
+# of the PHP base: `cli` (NTS) yields a .so ABI-compatible with cli/fpm/apache
+# (they share headers within a PHP minor); `zts` yields the thread-safe build.
 # ---------------------------------------------------------------------------
-FROM php:${PHP_VERSION}-cli-${OS_TAG} AS ext-builder
+FROM php:${PHP_VERSION}-${BUILDER_VARIANT}-${OS_TAG} AS ext-builder
 
 ARG V8JS_REF
 ARG V8_PREFIX

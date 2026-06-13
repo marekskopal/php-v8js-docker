@@ -54,11 +54,11 @@ group "default" {
 }
 
 group "debian" {
-  targets = ["debian-cli", "debian-fpm", "debian-apache"]
+  targets = ["debian-cli", "debian-fpm", "debian-apache", "debian-zts"]
 }
 
 group "alpine" {
-  targets = ["alpine-cli", "alpine-fpm"]
+  targets = ["alpine-cli", "alpine-fpm", "alpine-zts"]
 }
 
 target "_common" {
@@ -133,6 +133,24 @@ target "debian-apache" {
   )
 }
 
+# Thread-safe (ZTS) build. The ext-builder compiles v8js on the matching `zts`
+# PHP base via BUILDER_VARIANT so the .so loads into a ZTS runtime (e.g.
+# FrankenPHP, which embeds a ZTS PHP). cli/fpm/apache stay NTS.
+target "debian-zts" {
+  inherits = ["_debian"]
+  name     = "debian-zts-${replace(php, ".", "")}"
+  matrix   = { php = PHP_VERSIONS }
+  args = {
+    PHP_VERSION     = php
+    PHP_VARIANT     = "zts"
+    BUILDER_VARIANT = "zts"
+  }
+  tags = concat(
+    [img("${php}-zts-trixie")],
+    debian_shorthand_tags(php, "zts", "trixie"),
+  )
+}
+
 target "alpine-cli" {
   inherits = ["_alpine"]
   name     = "alpine-cli-${replace(php, ".", "")}"
@@ -153,4 +171,19 @@ target "alpine-fpm" {
     PHP_VARIANT = "fpm"
   }
   tags = [img("${php}-fpm-alpine")]
+}
+
+# Thread-safe (ZTS) build — see debian-zts. Compiles v8js against the `zts`
+# Alpine PHP base so the .so can be copied into a musl ZTS runtime such as the
+# FrankenPHP Alpine image.
+target "alpine-zts" {
+  inherits = ["_alpine"]
+  name     = "alpine-zts-${replace(php, ".", "")}"
+  matrix   = { php = PHP_VERSIONS }
+  args = {
+    PHP_VERSION     = php
+    PHP_VARIANT     = "zts"
+    BUILDER_VARIANT = "zts"
+  }
+  tags = [img("${php}-zts-alpine")]
 }

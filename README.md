@@ -25,17 +25,50 @@ docker pull marekskopal/php-v8js:latest
 | 8.4 | cli     | trixie | `8.4-cli-trixie`, `8.4-cli`, `8.4`      |
 | 8.4 | fpm     | trixie | `8.4-fpm-trixie`, `8.4-fpm`             |
 | 8.4 | apache  | trixie | `8.4-apache-trixie`, `8.4-apache`       |
+| 8.4 | zts     | trixie | `8.4-zts-trixie`, `8.4-zts`             |
 | 8.4 | cli     | alpine   | `8.4-cli-alpine`                          |
 | 8.4 | fpm     | alpine   | `8.4-fpm-alpine`                          |
+| 8.4 | zts     | alpine   | `8.4-zts-alpine`                          |
 | 8.5 | cli     | trixie | `8.5-cli-trixie`, `8.5-cli`, `8.5`, `latest` |
 | 8.5 | fpm     | trixie | `8.5-fpm-trixie`, `8.5-fpm`             |
 | 8.5 | apache  | trixie | `8.5-apache-trixie`, `8.5-apache`       |
+| 8.5 | zts     | trixie | `8.5-zts-trixie`, `8.5-zts`             |
 | 8.5 | cli     | alpine   | `8.5-cli-alpine`                          |
 | 8.5 | fpm     | alpine   | `8.5-fpm-alpine`                          |
+| 8.5 | zts     | alpine   | `8.5-zts-alpine`                          |
 
 Tag shorthands follow the [official `php` image
 convention](https://hub.docker.com/_/php): bare `<php>` and
 `<php>-<variant>` resolve to the Debian/trixie variant.
+
+### `zts` (thread-safe) variant
+
+The `cli`/`fpm`/`apache` images are **non-thread-safe (NTS)**, like the
+upstream `php` image defaults. The `zts` variant is built on the official
+`php:<v>-zts-*` base and ships a **thread-safe** `v8js.so` (extension dir
+`…/no-debug-zts-…`). Use it when the host PHP is ZTS — most notably
+[FrankenPHP](https://frankenphp.dev/), which embeds a ZTS PHP. An NTS `.so`
+**cannot** load into a ZTS PHP (the TSRM ABI differs), which is the whole
+reason this variant exists.
+
+The Alpine `zts` image is purpose-built to have its extension copied into a
+musl ZTS runtime. For FrankenPHP, copy the `.so` + loader and add Alpine's
+`nodejs-libs` (which provides the `libnode` v8js links against):
+
+```dockerfile
+FROM marekskopal/php-v8js:8.5-zts-alpine AS v8js
+FROM dunglas/frankenphp:1-php8.5-alpine
+RUN apk add --no-cache nodejs-libs
+COPY --from=v8js /usr/local/lib/php/extensions/no-debug-zts-20250925/v8js.so \
+     /usr/local/lib/php/extensions/no-debug-zts-20250925/v8js.so
+COPY --from=v8js /usr/local/etc/php/conf.d/v8js.ini \
+     /usr/local/etc/php/conf.d/v8js.ini
+```
+
+The extension-dir suffix (`no-debug-zts-20250925`) is the Zend module API
+stamp and must match between the two images — it is identical across all PHP
+8.5.x patch releases, so a `.so` built on `8.5-zts-alpine` loads into any
+FrankenPHP `php8.5` Alpine tag.
 
 There is intentionally **no `apache-alpine` variant** — the upstream
 `php` image does not provide one, and building Apache + `mod_php`
@@ -78,6 +111,7 @@ and exercised with `tests/smoke.php`:
 | `8.4-cli-trixie` (V8 12.9.203 from source) | `12.9.203` | smoke OK |
 | `8.4-cli-alpine` (V8 from Node 24.14.1) | `13.6.233.17-node.44` | smoke OK |
 | `8.5-cli-alpine` (V8 from Node 24.14.1) | `13.6.233.17-node.44` | smoke OK |
+| `8.5-zts-alpine` (ZTS, V8 from Node) | `13.6.233.17-node.49` | `new V8Js()` OK; `.so` also cross-loads into FrankenPHP `php8.5-alpine` (ZTS) |
 
 amd64 builds were not exercised locally (would require QEMU on an arm64
 host, multi-hour V8 compile). They go through the same Dockerfile and
@@ -251,10 +285,10 @@ docker buildx bake --set "*.args.V8_VERSION=11.8.144"
 
 ```
 .
-├── docker-bake.hcl              # bake matrix (all 10 tags)
+├── docker-bake.hcl              # bake matrix (cli/fpm/apache/zts × OS × PHP)
 ├── images/
-│   ├── debian/Dockerfile        # 3 variants × 2 PHP versions = 6 tags
-│   └── alpine/Dockerfile        # 2 variants × 2 PHP versions = 4 tags
+│   ├── debian/Dockerfile        # 4 variants (cli/fpm/apache/zts) × 2 PHP versions
+│   └── alpine/Dockerfile        # 3 variants (cli/fpm/zts) × 2 PHP versions
 ├── scripts/
 │   ├── build-v8.sh              # depot_tools + gn + ninja (Debian only)
 │   └── install-v8js.sh          # phpize + configure + make install
