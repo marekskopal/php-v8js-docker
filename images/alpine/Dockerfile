@@ -8,9 +8,10 @@
 #     building it on musl/Alpine via depot_tools is not supported upstream
 #     (phpv8/v8js's own CI takes this same shortcut — see their build-test.yml
 #     `alpine` job).
-#   * Alpine 3.22's nodejs package ships V8 12.4+, satisfying the V8 12+
-#     floor; the exact V8 minor is whatever Alpine's nodejs-dev provides at
-#     build time. The `v8.version` label records what was used.
+#   * Alpine 3.22's nodejs package ships V8 13.6 (Node 24), the same major
+#     as the Debian image's pinned V8; the exact V8 minor is whatever
+#     Alpine's nodejs-dev provides at build time. The `v8.version` label
+#     records what was used.
 
 ARG PHP_VERSION=8.4
 ARG PHP_VARIANT=cli

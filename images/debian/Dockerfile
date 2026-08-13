@@ -12,7 +12,7 @@ ARG OS_TAG=trixie
 # Keep this in lock-step with the runtime: `cli` for the NTS variants
 # (cli/fpm/apache), `zts` for the thread-safe variant. The bake file sets it.
 ARG BUILDER_VARIANT=cli
-ARG V8_VERSION=12.9.203
+ARG V8_VERSION=13.3.415
 # Pinned to the head of phpv8/v8js's php8 branch as of 2026-04-19 (the merge
 # of PR #545: PHP 8.4 deprecation fixes and memory-leak patches).
 ARG V8JS_REF=8a39efa3

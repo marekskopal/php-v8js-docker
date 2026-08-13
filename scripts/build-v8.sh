@@ -2,7 +2,7 @@
 # Build V8 as shared libraries and install to ${V8_PREFIX}.
 #
 # Inputs (env vars):
-#   V8_VERSION   git tag/ref to check out (e.g. 12.9.203)
+#   V8_VERSION   git tag/ref to check out (e.g. 13.3.415)
 #   V8_PREFIX    install prefix (e.g. /opt/v8)
 #   TARGETARCH   Docker buildx-supplied target arch (amd64 or arm64). Falls
 #                back to host arch via `uname -m` when unset.
@@ -57,20 +57,59 @@ mkdir -p "$out_dir"
 #   * use_sysroot = false         → don't fetch Chromium's vendored Debian
 #                                   sysroot; build against the host's libc
 #                                   (this is what makes arm64 native work)
-#   * is_clang = false            → use the host's gcc/g++. V8 12.9 still
-#                                   compiles with gcc 12+ (trixie ships gcc 14).
-#                                   Setting true would require apt-installing
-#                                   Chromium's clang into the builder.
+#   * is_clang = false            → use the host's gcc/g++ (trixie ships
+#                                   gcc 14). Upstream only tests clang, so
+#                                   this is the first thing to flip if a V8
+#                                   bump stops compiling — see the README's
+#                                   "Build hardening" section. Setting true
+#                                   means apt-installing clang (Chromium
+#                                   publishes no Linux arm64 build of its
+#                                   own). This is also what caps V8 at 13.3
+#                                   here: from 13.4 (string-hasher.cc) and
+#                                   13.7 (simd.cc) V8's arm64 NEON code
+#                                   relies on Clang's lax vector typing,
+#                                   which GCC rejects.
+#   * enable_rust = false +       → V8 13.x's own .gn sets enable_rust = true,
+#     v8_enable_temporal_support      and its DEPS ships third_party/rust-toolchain
+#     = false                         for Linux_x64 / Mac / Mac_arm64 / Win only
+#                                   (the Linux entry is conditioned on
+#                                   `host_os == "linux"`, with no arm64 build).
+#                                   On linux/arm64 that means an x86-64 rustc +
+#                                   bindgen land in the checkout and die under
+#                                   qemu-x86_64 with "Could not open
+#                                   /lib64/ld-linux-x86-64.so.2".
+#                                   Since 13.9 the Temporal API is implemented
+#                                   in Rust (//third_party/rust/temporal_capi),
+#                                   so enable_rust = false alone trips an
+#                                   assert in build/rust/rust_target.gni —
+#                                   Temporal has to go too. Upstream added that
+#                                   arg for the same reason ("some
+#                                   architectures don't have Rust toolchains in
+#                                   Chromium" — gni/v8.gni), and Temporal is
+#                                   unreachable without --harmony-temporal at
+#                                   runtime regardless. Nothing else in the
+#                                   embedder libs needs Rust.
 #   * treat_warnings_as_errors = false → tolerate toolchain drift (upstream
 #                                        does the same in their CI)
 #   * v8_enable_pointer_compression / v8_enable_sandbox = true → the
 #                                   v8js Dockerfile sets matching CPPFLAGS
+# v8_enable_temporal_support only exists from V8 13.9 on, and `gn gen` treats an
+# undeclared arg in args.gn as a hard error — so emit it only when the checked
+# out tree declares it. Keeps this script usable across 13.3…13.9+.
+if grep -q "v8_enable_temporal_support" gni/v8.gni; then
+    temporal_arg="v8_enable_temporal_support = false"
+else
+    temporal_arg="# v8_enable_temporal_support: not declared by this V8 version"
+fi
+
 cat > "${out_dir}/args.gn" <<EOF
 is_debug = false
 is_component_build = true
 use_custom_libcxx = false
 use_sysroot = false
 is_clang = false
+enable_rust = false
+${temporal_arg}
 treat_warnings_as_errors = false
 symbol_level = 0
 target_cpu = "${v8_cpu}"
