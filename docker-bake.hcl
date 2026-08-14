@@ -13,7 +13,7 @@
 
 variable "REGISTRY" { default = "docker.io" }
 variable "REPO"     { default = "marekskopal/php-v8js" }
-variable "V8_VERSION" { default = "13.3.415" }
+variable "V8_VERSION" { default = "13.9.210" }
 
 # Pinned to phpv8/v8js php8 @ 8a39efa3 (PR #545 merge: PHP 8.4 + memory-leak
 # fixes). Bump deliberately, not "latest", so images are reproducible.

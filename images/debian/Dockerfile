@@ -12,7 +12,7 @@ ARG OS_TAG=trixie
 # Keep this in lock-step with the runtime: `cli` for the NTS variants
 # (cli/fpm/apache), `zts` for the thread-safe variant. The bake file sets it.
 ARG BUILDER_VARIANT=cli
-ARG V8_VERSION=13.3.415
+ARG V8_VERSION=13.9.210
 # Pinned to the head of phpv8/v8js's php8 branch as of 2026-04-19 (the merge
 # of PR #545: PHP 8.4 deprecation fixes and memory-leak patches).
 ARG V8JS_REF=8a39efa3
@@ -28,13 +28,23 @@ ARG V8_VERSION
 ARG V8_PREFIX
 ARG TARGETARCH
 
+# clang / lld / llvm / libclang-rt-dev: V8 13.4+ needs Clang (its arm64 NEON
+# code relies on Clang's lax vector typing), and Chromium ships no Linux arm64
+# clang bundle, so we use Debian's. The unversioned metapackages track
+# whatever LLVM trixie defaults to — build-v8.sh detects the version at build
+# time. build-essential stays for libstdc++ headers and the V8_TOOLCHAIN=gcc
+# fallback.
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
         build-essential \
         ca-certificates \
+        clang \
         curl \
         git \
+        libclang-rt-dev \
         libglib2.0-dev \
+        lld \
+        llvm \
         patchelf \
         pkg-config \
         python3 \

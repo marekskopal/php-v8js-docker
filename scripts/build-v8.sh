@@ -25,12 +25,54 @@ set -eu
 : "${V8_PREFIX:=/opt/v8}"
 : "${V8_JOBS:=$(nproc)}"
 
+: "${V8_TOOLCHAIN:=clang}"
+
 arch="${TARGETARCH:-$(uname -m)}"
 case "$arch" in
-    amd64|x86_64)   v8_cpu="x64" ;;
-    arm64|aarch64)  v8_cpu="arm64" ;;
+    amd64|x86_64)   v8_cpu="x64";   clang_triple="x86_64-unknown-linux-gnu";  rt_arch="x86_64" ;;
+    arm64|aarch64)  v8_cpu="arm64"; clang_triple="aarch64-unknown-linux-gnu"; rt_arch="aarch64" ;;
     *) echo "ERROR: unsupported arch '$arch'" >&2; exit 1 ;;
 esac
+
+# ---------------------------------------------------------------------------
+# Toolchain. Chromium's build assumes *its own* clang bundle, which is
+# published for Linux_x64 / Mac / Mac_arm64 / Win only — there is no Linux
+# arm64 build — so on Debian we point it at the distro clang instead. Two
+# layout gaps have to be bridged for that to work; both are pure symlinks.
+# ---------------------------------------------------------------------------
+if [ "$V8_TOOLCHAIN" = "clang" ]; then
+    clang_version="$(clang --version | sed -n '1s/.*version \([0-9]*\).*/\1/p')"
+    : "${clang_version:?could not determine clang major version}"
+
+    # 1. compiler-rt: Debian ships lib/linux/libclang_rt.builtins-<arch>.a,
+    #    Chromium links lib/<triple>/libclang_rt.builtins.a (LLVM's newer
+    #    per-target layout). Without this the first .so link fails with
+    #    "missing and no known rule to make it".
+    rt_dir="/usr/lib/clang/${clang_version}/lib/${clang_triple}"
+    rt_src="/usr/lib/llvm-${clang_version}/lib/clang/${clang_version}/lib/linux/libclang_rt.builtins-${rt_arch}.a"
+    if [ ! -e "${rt_dir}/libclang_rt.builtins.a" ] && [ -e "$rt_src" ]; then
+        mkdir -p "$rt_dir"
+        ln -sf "$rt_src" "${rt_dir}/libclang_rt.builtins.a"
+    fi
+
+    # 2. LLVM binutils: build/toolchain/gcc_solink_wrapper.py shells out to
+    #    unversioned /usr/bin/llvm-readelf and llvm-nm; Debian only installs
+    #    the -<version> suffixed names.
+    for tool in llvm-readelf llvm-nm llvm-ar llvm-objcopy llvm-objdump llvm-strip; do
+        if [ ! -e "/usr/bin/${tool}" ] && [ -e "/usr/lib/llvm-${clang_version}/bin/${tool}" ]; then
+            ln -sf "/usr/lib/llvm-${clang_version}/bin/${tool}" "/usr/bin/${tool}"
+        fi
+    done
+
+    toolchain_args="is_clang = true
+clang_base_path = \"/usr\"
+clang_version = \"${clang_version}\"
+clang_use_chrome_plugins = false"
+    echo "Building V8 ${V8_VERSION} with clang ${clang_version} (${clang_triple})"
+else
+    toolchain_args="is_clang = false"
+    echo "Building V8 ${V8_VERSION} with gcc"
+fi
 
 work_dir="$(mktemp -d)"
 trap 'rm -rf "$work_dir"' EXIT
@@ -57,18 +99,20 @@ mkdir -p "$out_dir"
 #   * use_sysroot = false         → don't fetch Chromium's vendored Debian
 #                                   sysroot; build against the host's libc
 #                                   (this is what makes arm64 native work)
-#   * is_clang = false            → use the host's gcc/g++ (trixie ships
-#                                   gcc 14). Upstream only tests clang, so
-#                                   this is the first thing to flip if a V8
-#                                   bump stops compiling — see the README's
-#                                   "Build hardening" section. Setting true
-#                                   means apt-installing clang (Chromium
-#                                   publishes no Linux arm64 build of its
-#                                   own). This is also what caps V8 at 13.3
-#                                   here: from 13.4 (string-hasher.cc) and
-#                                   13.7 (simd.cc) V8's arm64 NEON code
-#                                   relies on Clang's lax vector typing,
-#                                   which GCC rejects.
+#   * is_clang = true             → build with the distro clang (see the
+#     + clang_base_path             toolchain block above). V8 requires it
+#     + clang_version               from 13.4 on: src/strings/string-hasher.cc
+#     + clang_use_chrome_plugins    (13.4+) and src/objects/simd.cc (13.7+)
+#                                   rely on Clang's lax NEON vector typing,
+#                                   which GCC rejects outright on arm64.
+#                                   clang_version must match the distro
+#                                   clang (Chromium defaults it to its own
+#                                   bundle's "21") because it drives the
+#                                   -resource-dir and libclang_rt paths.
+#                                   clang_use_chrome_plugins = false because
+#                                   the plugins are .so's built against
+#                                   Chromium's clang. Set V8_TOOLCHAIN=gcc
+#                                   to fall back — only viable up to 13.3.
 #   * enable_rust = false +       → V8 13.x's own .gn sets enable_rust = true,
 #     v8_enable_temporal_support      and its DEPS ships third_party/rust-toolchain
 #     = false                         for Linux_x64 / Mac / Mac_arm64 / Win only
@@ -107,7 +151,7 @@ is_debug = false
 is_component_build = true
 use_custom_libcxx = false
 use_sysroot = false
-is_clang = false
+${toolchain_args}
 enable_rust = false
 ${temporal_arg}
 treat_warnings_as_errors = false
