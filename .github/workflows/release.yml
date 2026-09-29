@@ -6,6 +6,9 @@ on:
     tags: ['v*']
   pull_request:
     branches: [main]
+  # Monthly rebuild on the 1st to pick up base-image and security updates.
+  schedule:
+    - cron: '0 3 1 * *'
   workflow_dispatch:
     inputs:
       push:
@@ -50,7 +53,7 @@ jobs:
           elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "value=${{ inputs.push }}" >> "$GITHUB_OUTPUT"
           else
-            # branch push or tag push
+            # branch push, tag push, or scheduled rebuild
             echo "value=true" >> "$GITHUB_OUTPUT"
           fi
 
@@ -74,12 +77,14 @@ jobs:
           #   * tags=    (empty) → mutually exclusive with push-by-digest,
           #     so we wipe the tags the bake file defines for each target
           #   * scoped GHA cache → keep amd64 and arm64 cache entries apart
+          #   * pull → on scheduled runs, always fetch the newest base image
           set: |
             *.platform=linux/${{ matrix.platform }}
             *.tags=
             *.output=type=image,name=${{ env.REGISTRY }}/${{ env.REPO }},push-by-digest=true,name-canonical=true,push=${{ steps.push.outputs.value }}
             *.cache-from=type=gha,scope=${{ matrix.platform }}
             *.cache-to=type=gha,mode=max,scope=${{ matrix.platform }}
+            *.pull=${{ github.event_name == 'schedule' }}
 
       - name: Export digests
         if: steps.push.outputs.value == 'true'
@@ -111,6 +116,7 @@ jobs:
     runs-on: ubuntu-24.04
     if: |
       (github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))) ||
+      github.event_name == 'schedule' ||
       (github.event_name == 'workflow_dispatch' && inputs.push == true)
     steps:
       - uses: actions/checkout@v4
