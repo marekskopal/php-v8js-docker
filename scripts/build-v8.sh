@@ -177,7 +177,11 @@ buildtools/linux64/gn gen "$out_dir"
 # Debian trixie's GCC 14 accepts. They're compiled into the
 # `cctest` executable, not libv8.so — skipping them is harmless for an
 # embedder. Build time drops too: ~3000 objects instead of ~4000.
-ninja -j "$V8_JOBS" -C "$out_dir" v8 v8_libplatform v8_libbase
+#
+# Call the ninja binary V8's DEPS pulls into third_party/ninja, not depot_tools'
+# `ninja` wrapper: that wrapper runs python-bin/python3, which needs the same
+# hermetic-python bootstrap that broke `fetch` (see above).
+third_party/ninja/ninja -j "$V8_JOBS" -C "$out_dir" v8 v8_libplatform v8_libbase
 
 install -d "${V8_PREFIX}/lib" "${V8_PREFIX}/include"
 cp "${out_dir}"/lib*.so "${V8_PREFIX}/lib/"
