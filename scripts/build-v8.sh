@@ -82,11 +82,14 @@ git clone --depth=1 https://chromium.googlesource.com/chromium/tools/depot_tools
 export PATH="$work_dir/depot_tools:$PATH"
 export DEPOT_TOOLS_UPDATE=0
 
-fetch --no-history v8
+# Equivalent of `fetch v8`, done by hand: since late Sep 2026 depot_tools'
+# `fetch` runs python-bin/python3, which needs a bootstrapped hermetic python
+# (fails here with "python3_bin_reldir.txt not found"; bootstrapping it fails
+# in a slim container, and fetch.py won't run on trixie's python 3.13 because
+# it imports distutils). `gclient` still self-bootstraps via vpython3.
+gclient config --name v8 --unmanaged https://chromium.googlesource.com/v8/v8.git
+gclient sync -D --no-history --shallow --revision "v8@refs/tags/${V8_VERSION}"
 cd v8
-git fetch --depth=1 origin "refs/tags/${V8_VERSION}:refs/tags/${V8_VERSION}"
-git checkout "tags/${V8_VERSION}"
-gclient sync -D --no-history --shallow
 
 out_dir="out.gn/${v8_cpu}.release"
 mkdir -p "$out_dir"
