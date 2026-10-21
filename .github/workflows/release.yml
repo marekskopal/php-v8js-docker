@@ -77,14 +77,14 @@ jobs:
           #   * tags=    (empty) → mutually exclusive with push-by-digest,
           #     so we wipe the tags the bake file defines for each target
           #   * scoped GHA cache → keep amd64 and arm64 cache entries apart
-          #   * pull → on scheduled runs, always fetch the newest base image
+          #   * pull → on scheduled and manual runs, always fetch the newest base image
           set: |
             *.platform=linux/${{ matrix.platform }}
             *.tags=
             *.output=type=image,name=${{ env.REGISTRY }}/${{ env.REPO }},push-by-digest=true,name-canonical=true,push=${{ steps.push.outputs.value }}
             *.cache-from=type=gha,scope=${{ matrix.platform }}
             *.cache-to=type=gha,mode=max,scope=${{ matrix.platform }}
-            *.pull=${{ github.event_name == 'schedule' }}
+            *.pull=${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
 
       - name: Export digests
         if: steps.push.outputs.value == 'true'
